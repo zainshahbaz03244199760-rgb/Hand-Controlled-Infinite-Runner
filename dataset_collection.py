@@ -51,6 +51,7 @@ print("\nStarting dataset collection...")
 print(f"Will collect exactly {MAX_SAMPLES} samples\n")
 
 while cap.isOpened():
+    print("Cam opened")
 
     success, frame = cap.read()
     if not success:

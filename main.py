@@ -1,130 +1,107 @@
-import cv2
-import mediapipe as mp
+"""
+main.py
+---------
+STEP 4 (part B): Full pipeline -- webcam -> hand detection -> trained model
+-> gesture smoothing -> game key presses.
+
+This is the script you actually run while playing the game.
+
+How to use:
+  1. Open Subway Surfers (browser tab or app window) and make sure it's
+     the focused/active window.
+  2. Run this script (it will open a second small window showing your
+     webcam feed with the recognized gesture overlaid -- useful for
+     debugging, you can ignore it once things work).
+  3. Make gestures in front of your camera; the corresponding key presses
+     are sent to whichever window is focused (the game).
+  4. Press 'q' inside the webcam window to stop.
+
+Make sure you've already run train_model.py at least once so that
+model/gesture_model.h5 and model/label_map.json exist.
+"""
+
+import json
 import time
 
-# ---------- MediaPipe setup ----------
+import cv2
+import mediapipe as mp
+import tensorflow as tf
 
-BaseOptions = mp.tasks.BaseOptions
-HandLandmarker = mp.tasks.vision.HandLandmarker
-HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
-VisionRunningMode = mp.tasks.vision.RunningMode
+from config import MODEL_PATH, LABEL_MAP_PATH
+from preprocessing import landmarks_to_array
+from realtime_classifier import GesturePredictor
+from game_controller import GameController
 
-options = HandLandmarkerOptions(
-    base_options=BaseOptions(
-        model_asset_path='hand_landmarker.task'
-    ),
-    running_mode=VisionRunningMode.VIDEO,
-    num_hands=2
-)
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
 
-landmarker = HandLandmarker.create_from_options(options)
 
-# ---------- Webcam ----------
+def main():
+    print("Loading trained model...")
+    model = tf.keras.models.load_model(MODEL_PATH)
+    with open(LABEL_MAP_PATH, "r") as f:
+        label_map = {int(k): v for k, v in json.load(f).items()}
 
-cap = cv2.VideoCapture(0)
+    predictor = GesturePredictor(model, label_map)
+    controller = GameController()
 
-while cap.isOpened():
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("ERROR: could not open webcam.")
+        return
 
-    success, frame = cap.read()
+    print("Starting in 3 seconds -- click on your game window now so it has focus...")
+    time.sleep(3)
+    print("Go! Press 'q' in the webcam window to stop.")
 
-    if not success:
-        break
+    with mp_hands.Hands(
+        max_num_hands=1,
+        min_detection_confidence=0.7,
+        min_tracking_confidence=0.7,
+    ) as hands:
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
 
-    # Flip webcam for mirror effect
-    frame = cv2.flip(frame,1)
+            frame = cv2.flip(frame, 1)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = hands.process(rgb)
 
-    rgb_frame = cv2.cvtColor(
-        frame,
-        cv2.COLOR_BGR2RGB
-    )
+            display_text = "No hand"
+            color = (0, 0, 255)
+            gesture_id = None
 
-    mp_image = mp.Image(
-        image_format=mp.ImageFormat.SRGB,
-        data=rgb_frame
-    )
+            if results.multi_hand_landmarks:
+                hand_landmarks = results.multi_hand_landmarks[0]
+                mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-    timestamp = int(time.time()*1000)
+                raw = landmarks_to_array(hand_landmarks)
+                gesture_id, confidence = predictor.predict(raw)
 
-    result = landmarker.detect_for_video(
-        mp_image,
-        timestamp
-    )
+                if gesture_id is not None:
+                    display_text = f"{label_map[gesture_id]} ({confidence*100:.0f}%)"
+                    color = (0, 255, 0)
+                else:
+                    display_text = f"Unsure ({confidence*100:.0f}%)"
+                    color = (0, 165, 255)
+            else:
+                predictor.reset()
 
-    height,width,_ = frame.shape
+            controller.handle_gesture(gesture_id)
 
-    if result.hand_landmarks:
+            cv2.putText(frame, display_text, (10, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
+            cv2.putText(frame, "press q to quit", (10, 470),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+            cv2.imshow("Gesture Game Control (debug view)", frame)
 
-        # Process each detected hand
-        for hand_index, hand_landmarks in enumerate(result.hand_landmarks):
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
-            # Get handedness info
-            hand_info = result.handedness[hand_index][0]
+    cap.release()
+    cv2.destroyAllWindows()
 
-            hand_label = hand_info.category_name
-            confidence = hand_info.score
 
-            print("\n"+"="*40)
-            print(
-                f"{hand_label} Hand "
-                f"(Confidence: {confidence:.2f})"
-            )
-
-            # Wrist landmark (point 0)
-            wrist = hand_landmarks[0]
-
-            wrist_x = int(wrist.x*width)
-            wrist_y = int(wrist.y*height)
-
-            # Draw handedness label
-            cv2.putText(
-                frame,
-                f"{hand_label} ({confidence:.2f})",
-                (wrist_x, wrist_y-20),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0,255,255),
-                2
-            )
-
-            # Draw landmarks
-            for i, landmark in enumerate(hand_landmarks):
-
-                x = int(landmark.x*width)
-                y = int(landmark.y*height)
-
-                cv2.circle(
-                    frame,
-                    (x,y),
-                    5,
-                    (0,255,0),
-                    -1
-                )
-
-                cv2.putText(
-                    frame,
-                    str(i),
-                    (x,y),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.4,
-                    (255,0,0),
-                    1
-                )
-
-                print(
-                    f"Landmark {i}: "
-                    f"x={landmark.x:.3f}, "
-                    f"y={landmark.y:.3f}, "
-                    f"z={landmark.z:.3f}"
-                )
-
-    cv2.imshow(
-        "Hand Tracking with Handedness",
-        frame
-    )
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
-landmarker.close()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    main()
