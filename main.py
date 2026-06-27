@@ -78,6 +78,7 @@ def main():
 
                 raw = landmarks_to_array(hand_landmarks)
                 gesture_id, confidence = predictor.predict(raw)
+                print(gesture_id)
 
                 if gesture_id is not None:
                     display_text = f"{label_map[gesture_id]} ({confidence*100:.0f}%)"

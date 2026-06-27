@@ -23,11 +23,11 @@ from config import GESTURES, GESTURE_COOLDOWN_SECONDS
 # Map our internal action names (from config.GESTURES) to actual keyboard keys.
 # Edit these if your game uses different controls.
 ACTION_TO_KEY = {
-    "right": "right",
-    "left": "left",
+    "right": "d",
+    "left": "a",
     "down": "down",
-    "up": "up",
-    "powerup": "space",   # change to whatever key your game uses for "power up"
+    "up": "space",
+    "powerup": None,   # change to whatever key your game uses for "power up"
     "none": None,         # closed hand -> do nothing
 }
 
@@ -37,28 +37,31 @@ class GameController:
         self.cooldown = cooldown
         self.last_action_time = 0.0
         self.last_gesture_id = None
+        self.last_key = None
 
     def handle_gesture(self, gesture_id):
-        """
-        Call this once per frame with the currently predicted gesture id
-        (or None if no confident gesture was detected this frame).
-        Internally debounces so a gesture held across many frames doesn't
-        spam the same key 30 times a second.
-        """
+
+        # No gesture → release held key
         if gesture_id is None:
+            if self.last_key:
+                pyautogui.keyUp(self.last_key)
+                self.last_key = None
+
             self.last_gesture_id = None
             return
 
         action = GESTURES[gesture_id]["action"]
         key = ACTION_TO_KEY.get(action)
 
-        now = time.time()
-        is_new_gesture = gesture_id != self.last_gesture_id
-        cooldown_elapsed = (now - self.last_action_time) >= self.cooldown
+        # Release previous key if changing gestures
+        if key != self.last_key:
 
-        if key is not None and (is_new_gesture or cooldown_elapsed):
-            pyautogui.press(key)
-            self.last_action_time = now
-            print(f"-> action: {action}  (key: {key})")
+            if self.last_key:
+                pyautogui.keyUp(self.last_key)
+
+            if key:
+                pyautogui.keyDown(key)
+
+            self.last_key = key
 
         self.last_gesture_id = gesture_id

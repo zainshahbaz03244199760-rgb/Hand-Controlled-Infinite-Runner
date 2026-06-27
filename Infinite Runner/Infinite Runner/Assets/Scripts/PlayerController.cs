@@ -6,9 +6,11 @@ public class PlayerController : MonoBehaviour
     public float moveSpeed = 8f;
     public float leftLimit = -4f;
     public float rightLimit = 4f;
-    public float jumpForce = 7f;
+    public float jumpForce = 2f;
     public Button startGameButton;
     public Button restartButton;
+
+    private Animator animator;
 
     private bool isGrounded = true;
 
@@ -20,6 +22,7 @@ public class PlayerController : MonoBehaviour
     void Start()
     {
         rb = GetComponent<Rigidbody>();
+        animator = GetComponent<Animator>();
     }
 
     void FixedUpdate()
@@ -57,7 +60,14 @@ public class PlayerController : MonoBehaviour
                 );
 
                 isGrounded = false;
+                animator.SetBool("isJumping", true);
             }
+
+            if (isGrounded)
+            {
+                animator.SetBool("isJumping", false);
+            }
+
         }
     }
     void OnCollisionEnter(Collision collision)
@@ -67,6 +77,7 @@ public class PlayerController : MonoBehaviour
             gameOver = true;
             gameStarted = false;
             restartButton.gameObject.SetActive(true);
+            animator.SetBool("gameStarted", false);
 
         }
 
@@ -82,5 +93,6 @@ public class PlayerController : MonoBehaviour
         gameOver = false;
         startGameButton.gameObject.SetActive(false);
         restartButton.gameObject.SetActive(false);
+        animator.SetBool("gameStarted", true);
     }
 }
