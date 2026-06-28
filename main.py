@@ -22,6 +22,7 @@ model/gesture_model.h5 and model/label_map.json exist.
 
 import json
 import time
+import requests
 
 import cv2
 import mediapipe as mp
@@ -34,18 +35,31 @@ from game_controller import GameController
 
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
+session = requests.Session()
+last_prediction_time = 0
+prediction_interval = 0.05
 
 
 def main():
-    print("Loading trained model...")
+    """print("Loading trained model...")
     model = tf.keras.models.load_model(MODEL_PATH)
     with open(LABEL_MAP_PATH, "r") as f:
         label_map = {int(k): v for k, v in json.load(f).items()}
 
-    predictor = GesturePredictor(model, label_map)
+    predictor = GesturePredictor(model, label_map)"""
+
+    global last_prediction_time
+
+    with open(LABEL_MAP_PATH, "r") as f:
+        label_map = {
+            int(k): v
+            for k, v in json.load(f).items()
+        }
     controller = GameController()
 
     cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
     if not cap.isOpened():
         print("ERROR: could not open webcam.")
         return
@@ -56,6 +70,7 @@ def main():
 
     with mp_hands.Hands(
         max_num_hands=1,
+        model_complexity=0,
         min_detection_confidence=0.7,
         min_tracking_confidence=0.7,
     ) as hands:
@@ -76,7 +91,7 @@ def main():
                 hand_landmarks = results.multi_hand_landmarks[0]
                 mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-                raw = landmarks_to_array(hand_landmarks)
+                """raw = landmarks_to_array(hand_landmarks)
                 gesture_id, confidence = predictor.predict(raw)
                 print(gesture_id)
 
@@ -85,9 +100,60 @@ def main():
                     color = (0, 255, 0)
                 else:
                     display_text = f"Unsure ({confidence*100:.0f}%)"
-                    color = (0, 165, 255)
-            else:
-                predictor.reset()
+                    color = (0, 165, 255)"""
+
+                current_time = time.time()
+
+                if current_time - last_prediction_time >= prediction_interval:
+                    raw = landmarks_to_array(hand_landmarks)
+
+                    try:
+                        response = session.post(
+                            "http://127.0.0.1:5000/predict",
+                            json={
+                                "landmarks": raw.tolist()
+                            },
+                            timeout=0.2
+                        )
+
+                        result = response.json()
+
+                        gesture_id = result["gesture_id"]
+                        confidence = result["confidence"]
+
+                        last_prediction_time = current_time
+
+                    except Exception as e:
+                        print("API Error:", e)
+
+                        gesture_id = None
+                        confidence = 0
+
+                    print(gesture_id)
+
+                    if gesture_id is not None:
+                        display_text = (
+                            f"{label_map[gesture_id]}"
+                            f" ({confidence * 100:.0f}%)"
+                        )
+
+                        color = (0, 255, 0)
+
+                    else:
+                        display_text = (
+                            f"Unsure ({confidence * 100:.0f}%)"
+                        )
+
+                        color = (0, 165, 255)
+
+                else:
+                    # predictor.reset()
+                    try:
+                        requests.post(
+                            "http://localhost:5000/reset"
+                        )
+                    except:
+                        pass
 
             controller.handle_gesture(gesture_id)
 
