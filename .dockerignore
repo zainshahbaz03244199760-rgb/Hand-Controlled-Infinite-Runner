@@ -1,0 +1,13 @@
+Infinite Runner/
+dataset/
+mlruns/
+.idea/
+.venv/
+__pycache__/
+*.pyc
+.git/
+uv.lock
+main.py
+game_controller.py
+train_model.py
+data_collection.py

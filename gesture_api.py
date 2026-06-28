@@ -18,6 +18,8 @@ python gesture_api.py
 """
 
 import json
+import os
+
 import numpy as np
 import tensorflow as tf
 from flask import Flask, request, jsonify
@@ -122,10 +124,13 @@ def health():
     ), 200
 
 
+host = os.getenv("GESTURE_API_HOST", "0.0.0.0")
+port = int(os.getenv("GESTURE_API_PORT", "5000"))
+
 if __name__ == "__main__":
     app.run(
-        host="127.0.0.1",
-        port=5000,
+        host=host,
+        port=port,
         debug=False,
         threaded=True
     )
