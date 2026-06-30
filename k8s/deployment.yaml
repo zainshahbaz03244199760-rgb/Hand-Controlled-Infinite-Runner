@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gesture-api
+  labels:
+    app: gesture-api
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: gesture-api
+
+  template:
+    metadata:
+      labels:
+        app: gesture-api
+
+    spec:
+      containers:
+        - name: gesture-api
+          image: zain7976/gesture-api:1.0.0
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 5000
+
+          env:
+            - name: GESTURE_API_HOST
+              value: "0.0.0.0"
+
+            - name: GESTURE_API_PORT
+              value: "5000"
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"

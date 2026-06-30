@@ -11,9 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-api.txt .
-RUN pip install --no-cache-dir -r requirements-api.txt
+RUN pip install -r requirements-api.txt
 
-COPY config.py preprocessing.py realtime_classifier.py gesture_api.py ./
+COPY config.py preprocessing.py predictor.py gesture_api.py ./
 COPY model/ model/
 
 EXPOSE 5000
