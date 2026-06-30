@@ -24,11 +24,8 @@ jobs:
           docker build \
           -t draco7976/gesture-detection-api:${{ github.sha }} \
           -t draco7976/gesture-detection-api:latest .
-          
-          docker push draco7976/gesture-detection-api:${{ github.sha }}
-          docker push draco7976/gesture-detection-api:latest
 
       - name: Push image
         run: |
-          docker push draco7976/gesture-api:${{ github.sha }}
-          docker push draco7976/gesture-api:latest
+          docker push draco7976/gesture-detection-api:${{ github.sha }}
+          docker push draco7976/gesture-detection-api:latest
